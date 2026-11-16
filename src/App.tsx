@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import {
   ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, CircleHelp,
   Clock3, CreditCard, Ellipsis, Filter, LayoutDashboard, LoaderCircle, Pencil, Plus, Search, Settings2, Sparkles,
-  Tag, Target, Trash2, TrendingDown, TrendingUp, Wallet, X,
+  ShoppingBasket, Tag, Target, Trash2, TrendingDown, TrendingUp, Wallet, X,
 } from 'lucide-react';
 import {
   Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -10,9 +10,10 @@ import {
 import { api } from './api';
 import { confirmAction, showError, showInfo, showSuccess } from './alerts';
 import PreferencesPanel from './PreferencesPanel';
+import ShoppingPanel from './ShoppingPanel';
 import type { Budget, Category, DashboardData, Entry, EntryType, RecurringRule } from './types';
 
-type Tab = 'overview' | 'entries' | 'recurring' | 'budgets' | 'settings';
+type Tab = 'overview' | 'entries' | 'shopping' | 'recurring' | 'budgets' | 'settings';
 type Modal = 'entry' | 'recurring' | 'category' | 'budget' | null;
 
 const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
@@ -37,6 +38,7 @@ function shiftMonth(month: string, delta: number) {
 const navItems: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
   { id: 'entries', label: 'Movimientos', icon: CreditCard },
+  { id: 'shopping', label: 'Compras', icon: ShoppingBasket },
   { id: 'recurring', label: 'Recurrentes', icon: CalendarDays },
   { id: 'budgets', label: 'Presupuestos', icon: Target },
   { id: 'settings', label: 'Preferencias', icon: Settings2 },
@@ -181,11 +183,11 @@ export default function App() {
 
         <div className="page-content">
           <section className="welcome-row">
-            <div><div className="eyebrow"><span className="eyebrow-line" /> TU DINERO, CON MÁS CLARIDAD</div><h1>{tab === 'overview' ? 'Un vistazo a tus finanzas' : pageTitle}</h1><p>{tab === 'overview' ? 'Cada decisión cuenta. Aquí tienes el mapa de tu mes.' : tab === 'entries' ? 'Todo lo que entra y sale, en un solo lugar.' : tab === 'recurring' ? 'Tus ingresos y gastos que se repiten cada mes.' : tab === 'budgets' ? 'Ponle intención a cada euro con límites claros.' : 'Personaliza tus categorías y revisa cómo protegemos tus datos.'}</p></div>
-            {tab !== 'settings' && <button className="button button-primary" onClick={() => openEntryForm()}><Plus size={17} /> Nuevo movimiento</button>}
+            <div><div className="eyebrow"><span className="eyebrow-line" /> TU DINERO, CON MÁS CLARIDAD</div><h1>{tab === 'overview' ? 'Un vistazo a tus finanzas' : pageTitle}</h1><p>{tab === 'overview' ? 'Cada decisión cuenta. Aquí tienes el mapa de tu mes.' : tab === 'entries' ? 'Todo lo que entra y sale, en un solo lugar.' : tab === 'shopping' ? 'Tickets, lista y precios para organizar mejor la compra.' : tab === 'recurring' ? 'Tus ingresos y gastos que se repiten cada mes.' : tab === 'budgets' ? 'Ponle intención a cada euro con límites claros.' : 'Personaliza tus categorías y revisa cómo protegemos tus datos.'}</p></div>
+            {tab !== 'settings' && tab !== 'shopping' && <button className="button button-primary" onClick={() => openEntryForm()}><Plus size={17} /> Nuevo movimiento</button>}
           </section>
 
-          {tab !== 'settings' && <div className="month-toolbar"><div className="month-selector"><button className="month-arrow" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Mes anterior"><ArrowLeft size={16} /></button><button className="month-current" onClick={() => setMonth(monthToday())}><CalendarDays size={16} /><span>{formatMonth(month)}</span><ChevronDown size={14} /></button><button className="month-arrow" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="Mes siguiente"><ArrowRight size={16} /></button></div><span className="updated-label">Actualizado ahora</span></div>}
+          {tab !== 'settings' && tab !== 'shopping' && <div className="month-toolbar"><div className="month-selector"><button className="month-arrow" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Mes anterior"><ArrowLeft size={16} /></button><button className="month-current" onClick={() => setMonth(monthToday())}><CalendarDays size={16} /><span>{formatMonth(month)}</span><ChevronDown size={14} /></button><button className="month-arrow" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="Mes siguiente"><ArrowRight size={16} /></button></div><span className="updated-label">Actualizado ahora</span></div>}
 
           {error && <div className="alert alert-error"><CircleHelp size={19} /><div><strong>No se pudo cargar tu información</strong><span>{error}. Comprueba Azure SQL y que el backend esté en marcha; revisa la guía del repositorio.</span></div><button className="button button-small" onClick={() => { setLoading(true); void refresh(); }}>Reintentar</button></div>}
           {loading && !dashboard && <div className="loading-state"><LoaderCircle className="spin" size={24} /> Conectando con tus finanzas…</div>}
@@ -215,6 +217,7 @@ export default function App() {
           {tab === 'budgets' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Límites por categoría</h2><p>Lo que has gastado frente a tu objetivo este mes.</p></div><button className="button button-primary" onClick={() => openBudgetForm()}><Plus size={16} /> Añadir límite</button></div>{budgets.length ? <div className="budget-grid">{budgets.map((budget) => <BudgetCard key={budget.id} budget={budget} onEdit={() => openBudgetForm(budget)} onDelete={() => void removeBudget(budget)} />)}</div> : <EmptyState icon={<Target size={23} />} title="Un plan para gastar con calma" text="Crea un presupuesto mensual para las categorías que quieras cuidar." action="Crear presupuesto" onAction={() => openBudgetForm()} />}</section>}
 
           {tab === 'settings' && <PreferencesPanel categories={categories} onAddCategory={() => setModal('category')} onUpdateCategory={handleUpdateCategory} onDeleteCategory={handleDeleteCategory} />}
+          {tab === 'shopping' && <ShoppingPanel categories={categories} onFinancialChange={() => { void refresh(); }} />}
 
           {tab !== 'settings' && !dashboard && !loading && !error && <div className="empty-state"><Wallet size={22} />No hay datos todavía. Añade tu primer movimiento.</div>}
         </div>

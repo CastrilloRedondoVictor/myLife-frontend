@@ -1,4 +1,4 @@
-import type { Budget, Category, DashboardData, Entry, EntryStatus, EntryType, RecurringRule } from './types';
+import type { Budget, Category, DashboardData, Entry, EntryStatus, EntryType, ProductComparison, RecurringRule, ShoppingListItem, ShoppingProduct, ShoppingReceipt, ShoppingUnit, Supermarket } from './types';
 
 const baseUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000/api').replace(/\/$/, '');
 
@@ -47,4 +47,40 @@ export const api = {
   updateBudget: (id: string, budget: { categoryId: string; month: string; limitAmount: number }) =>
     request<Budget>(`/budgets/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(budget) }),
   deleteBudget: (id: string) => request<void>(`/budgets/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  supermarkets: (includeArchived = false) => request<Supermarket[]>(`/shopping/supermarkets${includeArchived ? '?includeArchived=true' : ''}`),
+  createSupermarket: (name: string) => request<Supermarket>('/shopping/supermarkets', { method: 'POST', body: JSON.stringify({ name }) }),
+  updateSupermarket: (id: string, data: { name?: string; active?: boolean }) =>
+    request<Supermarket>(`/shopping/supermarkets/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  shoppingProducts: (query = '', includeArchived = false) => {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (includeArchived) params.set('includeArchived', 'true');
+    return request<ShoppingProduct[]>(`/shopping/products${params.size ? `?${params}` : ''}`);
+  },
+  createShoppingProduct: (name: string) =>
+    request<ShoppingProduct>('/shopping/products', { method: 'POST', body: JSON.stringify({ name }) }),
+  updateShoppingProduct: (id: string, data: { name?: string; active?: boolean }) =>
+    request<ShoppingProduct>(`/shopping/products/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  shoppingList: () => request<ShoppingListItem[]>('/shopping/list'),
+  addShoppingListItem: (productId: string, note?: string) =>
+    request<ShoppingListItem>('/shopping/list', { method: 'POST', body: JSON.stringify({ productId, note }) }),
+  updateShoppingListItem: (id: string, note: string | null) =>
+    request<ShoppingListItem>(`/shopping/list/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ note }) }),
+  removeShoppingListItem: (id: string) => request<void>(`/shopping/list/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  shoppingReceipts: () => request<ShoppingReceipt[]>('/shopping/receipts'),
+  createShoppingReceipt: (receipt: ShoppingReceiptInput) =>
+    request<ShoppingReceipt>('/shopping/receipts', { method: 'POST', body: JSON.stringify(receipt) }),
+  updateShoppingReceipt: (id: string, receipt: ShoppingReceiptInput) =>
+    request<ShoppingReceipt>(`/shopping/receipts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(receipt) }),
+  deleteShoppingReceipt: (id: string) => request<void>(`/shopping/receipts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  productComparison: (productId: string) =>
+    request<ProductComparison>(`/shopping/compare/${encodeURIComponent(productId)}`),
 };
+
+export interface ShoppingReceiptInput {
+  supermarketName: string;
+  categoryId: string;
+  date: string;
+  adjustment: number;
+  items: Array<{ productId: string; brand?: string; packageLabel?: string; unitsPurchased: number; quantity: number; unit: ShoppingUnit; amount: number }>;
+}
