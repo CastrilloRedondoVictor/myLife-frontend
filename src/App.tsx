@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, CircleHelp,
   Clock3, CreditCard, Ellipsis, Filter, LayoutDashboard, LoaderCircle, Pencil, Plus, Search, Settings2, Sparkles,
   ShoppingBasket, Tag, Target, Trash2, TrendingDown, TrendingUp, Wallet, X,
 } from 'lucide-react';
-import {
-  Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts';
 import { api } from './api';
 import { confirmAction, showError, showInfo, showSuccess } from './alerts';
 import PreferencesPanel from './PreferencesPanel';
@@ -15,6 +12,9 @@ import type { Budget, Category, DashboardData, Entry, EntryType, RecurringRule }
 
 type Tab = 'overview' | 'entries' | 'shopping' | 'recurring' | 'budgets' | 'settings';
 type Modal = 'entry' | 'recurring' | 'category' | 'budget' | null;
+
+const DailyCashflowChart = lazy(() => import('./ChartVisualizations').then((module) => ({ default: module.DailyCashflowChart })));
+const ExpenseCategoryChart = lazy(() => import('./ChartVisualizations').then((module) => ({ default: module.ExpenseCategoryChart })));
 
 const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
 const numberValue = (value: number | string) => Number(value);
@@ -59,6 +59,9 @@ export default function App() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | EntryType>('ALL');
+  const [cashflowFilter, setCashflowFilter] = useState<'income' | 'expense' | 'both'>('both');
+  const [expenseDetailFilter, setExpenseDetailFilter] = useState<'both' | 'fixed' | 'variable'>('both');
+  const [expenseFilter, setExpenseFilter] = useState<'variable' | 'fixed' | 'all'>('variable');
 
   const refresh = useCallback(async () => {
     setError('');
@@ -80,9 +83,26 @@ export default function App() {
   }, [month]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  const cashflowData = useMemo(() => dashboard?.dailyCashflow
+    .map((point) => ({
+      ...point,
+      fixedExpense: cashflowFilter === 'expense' && expenseDetailFilter === 'variable' ? 0 : point.fixedExpense,
+      variableExpense: cashflowFilter === 'expense' && expenseDetailFilter === 'fixed' ? 0 : point.variableExpense,
+      expense: cashflowFilter === 'expense' && expenseDetailFilter === 'fixed'
+        ? point.fixedExpense
+        : cashflowFilter === 'expense' && expenseDetailFilter === 'variable' ? point.variableExpense : point.expense,
+    }))
+    .filter((point) => cashflowFilter === 'income' ? point.income > 0 : cashflowFilter === 'expense' ? point.expense > 0 : true) ?? [], [dashboard, cashflowFilter, expenseDetailFilter]);
   const expenseCategories = useMemo(() => dashboard?.categories
-    .filter((category) => category.type === 'EXPENSE' && category.fixed + category.variable > 0)
-    .map((category) => ({ name: category.categoryName, value: category.fixed + category.variable, color: category.color })) ?? [], [dashboard]);
+    .filter((category) => category.type === 'EXPENSE')
+    .map((category) => ({
+      name: category.categoryName,
+      value: expenseFilter === 'variable' ? category.variable : expenseFilter === 'fixed' ? category.fixed : category.fixed + category.variable,
+      color: category.color,
+    }))
+    .filter((category) => category.value > 0) ?? [], [dashboard, expenseFilter]);
+  const categoryExpenseTotal = expenseCategories.reduce((total, category) => total + category.value, 0);
+  const categoryExpenseLabel = expenseFilter === 'variable' ? 'Variables' : expenseFilter === 'fixed' ? 'Fijos' : 'Total del mes';
 
   async function handleCreateEntry(data: { type: EntryType; amount: number; description: string; date: string; categoryId: string }) {
     await api.createEntry({ ...data, status: 'CONFIRMED' });
@@ -202,9 +222,13 @@ export default function App() {
             {dashboard.monthSummary.pending > 0 && <button className="pending-banner" onClick={() => setTab('entries')}><span className="pending-symbol"><Clock3 size={17} /></span><span><strong>Tienes {dashboard.monthSummary.pending} {dashboard.monthSummary.pending === 1 ? 'movimiento pendiente' : 'movimientos pendientes'}</strong><small>Revisa los cobros y pagos previstos de tus reglas fijas.</small></span><ArrowRight size={17} /></button>}
 
             <section className="dashboard-grid">
-              <article className="panel cashflow-panel"><div className="panel-heading"><div><h2>Ingresos y gastos</h2><p>Una vista clara de cómo se mueve tu dinero</p></div><span className="panel-select">Este mes <ChevronDown size={14} /></span></div><div className="chart-legend"><span><i className="legend-dot legend-income" /> Ingresos</span><span><i className="legend-dot legend-expense" /> Gastos</span><span className="legend-note">Fijos + variables</span></div><div className="cashflow-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={[{ name: 'Fijos', income: dashboard.monthSummary.fixedIncome, expense: dashboard.monthSummary.fixedExpense }, { name: 'Variables', income: dashboard.monthSummary.variableIncome, expense: dashboard.monthSummary.variableExpense }]} margin={{ top: 10, right: 12, left: -14, bottom: 0 }}><defs><linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#36b99a" stopOpacity={0.19} /><stop offset="95%" stopColor="#36b99a" stopOpacity={0.01} /></linearGradient><linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f38a79" stopOpacity={0.17} /><stop offset="95%" stopColor="#f38a79" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid stroke="#edf0f4" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8b94a5', fontSize: 12 }} dy={12} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#a0a7b3', fontSize: 11 }} tickFormatter={(value: number) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : `${value}€`} /><Tooltip formatter={(value) => currency.format(Number(value))} contentStyle={{ borderRadius: 12, border: '1px solid #e8ebf0', fontFamily: 'DM Sans' }} /><Area type="monotone" dataKey="income" name="Ingresos" stroke="#35b696" strokeWidth={2.5} fill="url(#incomeFill)" /><Area type="monotone" dataKey="expense" name="Gastos" stroke="#f08b7d" strokeWidth={2.5} fill="url(#expenseFill)" /></AreaChart></ResponsiveContainer></div><div className="chart-insight"><span className="insight-mark"><TrendingUp size={15} /></span><span>Tu balance del mes es de <strong>{currency.format(dashboard.monthSummary.income - dashboard.monthSummary.expense)}</strong></span></div></article>
+              <article className="panel cashflow-panel">
+                <div className="panel-heading"><div><h2>Ingresos y gastos</h2><p>{cashflowFilter === 'both' ? 'Acumulado mensual' : 'Importes diarios'} · {formatMonth(month)}</p></div><div className="chart-filters"><select className="chart-filter" aria-label="Filtrar ingresos y gastos" value={cashflowFilter} onChange={(event) => setCashflowFilter(event.target.value as 'income' | 'expense' | 'both')}><option value="income">Solo ingresos</option><option value="expense">Solo gastos</option><option value="both">Ambos</option></select>{cashflowFilter === 'expense' && <select className="chart-filter" aria-label="Filtrar gastos fijos o variables" value={expenseDetailFilter} onChange={(event) => setExpenseDetailFilter(event.target.value as 'both' | 'fixed' | 'variable')}><option value="both">Fijos y variables</option><option value="fixed">Solo fijos</option><option value="variable">Solo variables</option></select>}</div></div>
+                <div className="chart-legend">{(cashflowFilter !== 'expense') && <span><i className="legend-dot legend-income" /> {cashflowFilter === 'both' ? 'Ingresos acumulados' : 'Ingresos diarios'}</span>}{(cashflowFilter !== 'income') && (cashflowFilter === 'expense' && expenseDetailFilter !== 'both' ? <span><i className="legend-dot legend-expense" /> {expenseDetailFilter === 'fixed' ? 'Gastos fijos diarios' : 'Gastos variables diarios'}</span> : cashflowFilter === 'expense' ? <><span><i className="legend-dot legend-expense" /> Gastos fijos diarios</span><span><i className="legend-dot legend-expense-variable" /> Gastos variables diarios</span></> : <span><i className="legend-dot legend-expense" /> Gastos acumulados</span>)}<span className="legend-note">{cashflowFilter === 'both' ? 'Al pasar el cursor: importes de ese día' : 'Al pasar el cursor: importe de ese día'}</span></div>
+                <div className="cashflow-chart">{cashflowData.length ? <Suspense fallback={<div className="empty-chart">Preparando gráfica…</div>}><DailyCashflowChart data={cashflowData} mode={cashflowFilter} expenseMode={expenseDetailFilter} /></Suspense> : <div className="empty-chart">No hay {cashflowFilter === 'income' ? 'ingresos' : 'gastos'} {cashflowFilter === 'expense' && expenseDetailFilter !== 'both' ? expenseDetailFilter === 'fixed' ? 'fijos' : 'variables' : ''} confirmados<br />en este periodo</div>}</div>
+              </article>
 
-              <article className="panel category-panel"><div className="panel-heading"><div><h2>¿A dónde va?</h2><p>Tus gastos por categoría</p></div><button className="more-button" aria-label="Más opciones"><Ellipsis size={20} /></button></div><div className="donut-wrap">{expenseCategories.length ? <><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={expenseCategories} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="89%" paddingAngle={3} stroke="none" cornerRadius={5}>{expenseCategories.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip formatter={(value) => currency.format(Number(value))} contentStyle={{ borderRadius: 12, border: '1px solid #e8ebf0', fontFamily: 'DM Sans' }} /></PieChart></ResponsiveContainer><div className="donut-center"><span>Gasto total</span><strong>{currency.format(dashboard.monthSummary.expense)}</strong></div></> : <div className="empty-chart">Aún no hay gastos<br />en este periodo</div>}</div><div className="category-legend">{expenseCategories.slice(0, 4).map((item) => <div className="category-legend-row" key={item.name}><span><i style={{ backgroundColor: item.color }} />{item.name}</span><strong>{dashboard.monthSummary.expense ? `${Math.round(item.value / dashboard.monthSummary.expense * 100)}%` : '0%'}</strong></div>)}{expenseCategories.length === 0 && <span className="muted-copy">Añade un movimiento para ver el desglose.</span>}</div><button className="text-action" onClick={() => setTab('entries')}>Ver movimientos <ArrowRight size={15} /></button></article>
+              <article className="panel category-panel"><div className="panel-heading"><div><h2>¿A dónde va?</h2><p>{expenseFilter === 'all' ? 'Todos los gastos por categoría' : expenseFilter === 'fixed' ? 'Solo gastos fijos' : 'Solo gastos variables'}</p></div><select className="chart-filter" aria-label="Filtrar gastos por tipo" value={expenseFilter} onChange={(event) => setExpenseFilter(event.target.value as 'variable' | 'fixed' | 'all')}><option value="variable">Solo variables</option><option value="fixed">Solo fijos</option><option value="all">Todos</option></select></div><div className="donut-wrap">{expenseCategories.length ? <><Suspense fallback={<div className="empty-chart">Preparando gráfica…</div>}><ExpenseCategoryChart data={expenseCategories} /></Suspense><div className="donut-center"><span>{categoryExpenseLabel}</span><strong>{currency.format(categoryExpenseTotal)}</strong></div></> : <div className="empty-chart">No hay gastos {expenseFilter === 'variable' ? 'variables' : expenseFilter === 'fixed' ? 'fijos' : 'registrados'}<br />en este periodo</div>}</div><div className="category-legend">{expenseCategories.slice(0, 4).map((item) => <div className="category-legend-row" key={item.name}><span><i style={{ backgroundColor: item.color }} />{item.name}</span><strong>{categoryExpenseTotal ? `${Math.round(item.value / categoryExpenseTotal * 100)}%` : '0%'}</strong></div>)}</div><button className="text-action" onClick={() => setTab('entries')}>Ver movimientos <ArrowRight size={15} /></button></article>
             </section>
 
             <section className="bottom-grid"><article className="panel recent-panel"><div className="panel-heading"><div><h2>Actividad reciente</h2><p>Los últimos movimientos de tu mes</p></div><button className="text-action compact-action" onClick={() => setTab('entries')}>Ver todos <ArrowRight size={15} /></button></div><EntryList entries={dashboard.recentEntries} onConfirm={confirmEntry} onDelete={removeEntry} onEdit={openEntryForm} compact /></article><article className="panel budget-preview"><div className="panel-heading"><div><h2>Presupuestos</h2><p>Cuida el ritmo de tus gastos</p></div><button className="more-button" aria-label="Ver presupuestos" onClick={() => setTab('budgets')}><ArrowRight size={18} /></button></div>{budgets.slice(0, 3).map((budget) => <BudgetLine key={budget.id} budget={budget} />)}{budgets.length === 0 && <div className="empty-inline"><div className="empty-icon"><Target size={19} /></div><strong>Empieza por marcar un objetivo</strong><span>Define un límite mensual por categoría.</span><button className="button button-soft" onClick={() => openBudgetForm()}><Plus size={15} /> Crear presupuesto</button></div>}</article></section>

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Archive, ArrowDown, Check, ChevronDown, ChevronUp, ClipboardList, LoaderCircle, Pencil, Plus, ReceiptText, Search, ShoppingBasket, Store, Trash2, X } from 'lucide-react';
 import { api, type ShoppingReceiptInput } from './api';
 import { confirmAction, showError, showSuccess } from './alerts';
 import type { Category, ProductComparison, ShoppingDimension, ShoppingListItem, ShoppingProduct, ShoppingReceipt, ShoppingUnit, Supermarket } from './types';
+import type { PriceHistoryLine, PriceHistoryRow } from './ChartVisualizations';
 
 type Section = 'receipts' | 'list' | 'compare' | 'catalog';
 type ReceiptLineDraft = { key: string; productId: string; productQuery: string; brand: string; packageLabel: string; unitsPurchased: string; quantity: string; unit: ShoppingUnit; amount: string; prefilledDate: string };
+const PriceHistoryChart = lazy(() => import('./ChartVisualizations').then((module) => ({ default: module.PriceHistoryChart })));
 const euro = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
 const dateToday = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; };
 const commonSupermarkets = ['Mercadona', 'Lidl', 'Carrefour', 'DIA', 'Alcampo', 'Eroski', 'Consum', 'Aldi', 'El Corte Inglés', 'Ahorramás'];
@@ -318,9 +319,9 @@ function CompareView({ products }: { products: ShoppingProduct[] }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (!productId) { setComparison(null); return; } setBusy(true); void api.productComparison(productId).then(setComparison).catch((reason: unknown) => showError(reason instanceof Error ? reason.message : 'No se pudo cargar la comparación.')).finally(() => setBusy(false)); }, [productId]);
   const chartData = useMemo(() => {
-    if (!comparison) return { rows: [] as Array<Record<string, string | number>>, lines: [] as Array<{ key: string; label: string; color: string }> };
-    const lineMap = new Map<string, { key: string; label: string; color: string }>();
-    const rowsByDate = new Map<string, Record<string, string | number>>();
+    if (!comparison) return { rows: [] as PriceHistoryRow[], lines: [] as PriceHistoryLine[] };
+    const lineMap = new Map<string, PriceHistoryLine>();
+    const rowsByDate = new Map<string, PriceHistoryRow>();
     comparison.history.forEach((point) => {
       const key = `${point.supermarketId}:${point.variantId}`;
       if (!lineMap.has(key)) {
@@ -342,7 +343,7 @@ function CompareView({ products }: { products: ShoppingProduct[] }) {
       <section className="panel comparison-panel"><div className="panel-heading"><div><h3>{comparison.product.name}</h3><p>Comparación por {unitLabel(comparison.product.dimension) || 'unidad comparable pendiente'}.</p></div><span className="comparison-period">Precio por unidad estándar</span></div>
         {comparison.recommendations.length ? <div className="comparison-table-wrap"><table className="comparison-table"><thead><tr><th>Supermercado</th><th>Variante más económica</th><th>Precio comparable</th><th>Última observación</th></tr></thead><tbody>{comparison.recommendations.map((item, index) => <tr key={item.supermarketId} className={index === 0 ? 'recommended-row' : ''}><td><strong>{index === 0 && <span className="recommendation-medal">★</span>}{item.supermarketName}</strong></td><td>{item.brand || 'Sin marca'}<small>{item.packageLabel || 'Formato no indicado'}</small></td><td><strong>{euro.format(item.pricePerStandard)} {comparison.unit}</strong><small>Pagado: {moneyText(item.amount)}</small></td><td>{formatDate(item.date)}</td></tr>)}</tbody></table></div> : <EmptyShopping icon={<Search size={22} />} title="Todavía no hay precios" text="Guarda un ticket con este producto para que aparezca la comparación." />}
       </section>
-      <section className="panel price-history-panel"><div className="panel-heading"><div><h3>Historial de precios · últimos 12 meses</h3><p>Una serie por supermercado y variante observada en tus tickets.</p></div></div>{chartData.rows.length ? <div className="price-history-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData.rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}><CartesianGrid stroke="#edf0f4" vertical={false} /><XAxis dataKey="date" tickFormatter={(value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('es-ES', { month: 'short', year: '2-digit' })} tick={{ fill: '#8b94a5', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis tickFormatter={(value: number) => `${Number(value).toFixed(1)}€`} tick={{ fill: '#8b94a5', fontSize: 11 }} axisLine={false} tickLine={false} width={60} /><Tooltip labelFormatter={(value) => formatDate(String(value))} formatter={(value, name) => [`${euro.format(Number(value))} ${comparison.unit}`, String(name)]} contentStyle={{ borderRadius: 12, border: '1px solid #e8ebf0', boxShadow: '0 10px 28px rgba(29,38,58,.16)' }} /><Legend />{chartData.lines.map((line) => <Line key={line.key} type="monotone" dataKey={line.key} name={line.label} stroke={line.color} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls />)}</LineChart></ResponsiveContainer></div> : <div className="shopping-chart-empty">El historial aparecerá aquí cuando registres compras de este producto.</div>}</section>
+      <section className="panel price-history-panel"><div className="panel-heading"><div><h3>Historial de precios · últimos 12 meses</h3><p>Una serie por supermercado y variante observada en tus tickets.</p></div></div>{chartData.rows.length ? <div className="price-history-chart"><Suspense fallback={<div className="shopping-chart-empty">Preparando gráfica…</div>}><PriceHistoryChart rows={chartData.rows} lines={chartData.lines} unit={comparison.unit} /></Suspense></div> : <div className="shopping-chart-empty">El historial aparecerá aquí cuando registres compras de este producto.</div>}</section>
     </>}
   </>;
 }

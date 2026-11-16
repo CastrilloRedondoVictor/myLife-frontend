@@ -7,7 +7,9 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				manualChunks(id) {
-					  if (id.includes('/node_modules/recharts/')) return 'charts';
+					if (id.includes('/node_modules/echarts-for-react/')) return 'echarts-react';
+					if (id.includes('/node_modules/echarts/')) return 'echarts';
+					if (id.includes('/node_modules/zrender/')) return 'zrender';
 					if (id.includes('/node_modules/')) return 'vendor';
 				},
 			},

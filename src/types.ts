@@ -54,6 +54,7 @@ export interface DashboardData {
     pending: number;
   };
   categories: Array<{ categoryId: string; categoryName: string; color: string; type: EntryType; fixed: number; variable: number }>;
+  dailyCashflow: Array<{ date: string; income: number; expense: number; fixedExpense: number; variableExpense: number }>;
   recentEntries: Entry[];
 }
 

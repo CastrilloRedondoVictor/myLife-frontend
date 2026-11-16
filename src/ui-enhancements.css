@@ -2,9 +2,11 @@
 :focus-visible { outline: 3px solid #8574dc; outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .65; }
 .cashflow-panel, .category-panel { overflow: visible; }
-.cashflow-chart, .donut-wrap, .recharts-wrapper { overflow: visible; }
-.recharts-tooltip-wrapper { z-index: 30 !important; pointer-events: none; }
-.recharts-default-tooltip { box-shadow: 0 10px 28px rgba(29, 38, 58, .16); }
+.cashflow-chart, .donut-wrap { overflow: visible; }
+.chart-filter { max-width: 118px; min-width: 104px; height: 29px; padding: 0 8px; border: 1px solid #eef0f4; border-radius: 8px; background: #fff; color: #7e8795; font-size: 10px; font-weight: 600; }
+.chart-filters { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.legend-expense-variable { background: #bb726d; }
+.cashflow-chart { height: 205px; }
 .preferences-layout { display: grid; gap: 16px; }
 .preferences-panel { margin: 0; }
 .settings-category-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

@@ -5,7 +5,7 @@ Interfaz web local para gestionar las finanzas personales. Este repositorio GitH
 ## Stack y organización
 
 - React 19, TypeScript, Vite 7.
-- Recharts para visualizaciones; Lucide para iconografía.
+- Apache ECharts (carga modular y diferida) para gráficos interactivos; Lucide para iconografía.
 - `src/App.tsx`: navegación, dashboard, pantallas de movimientos, reglas recurrentes y presupuestos, y formularios.
 - `src/api.ts`: cliente HTTP tipado para el contrato `/api` del backend.
 - `src/types.ts`: tipos de respuesta y dominio consumidos.
@@ -17,7 +17,8 @@ Interfaz web local para gestionar las finanzas personales. Este repositorio GitH
 - Alta de movimientos, búsqueda y filtros por tipo; confirmar movimientos fijos previstos y eliminarlos.
 - Crear categorías de ingreso/gasto, reglas mensuales recurrentes (pausar/reactivar) y límites de presupuesto por categoría.
 - La app pide al backend generar movimientos recurrentes pendientes al cargar; el backend garantiza que no se dupliquen.
-- Gráficas de fijo/variable y gasto por categoría. Los gráficos comparan agregados del periodo seleccionado, no una serie diaria.
+- Gráfica mensual de líneas con los totales diarios confirmados de ingresos y gastos; el tooltip muestra ambos importes del día y se puede ampliar, restablecer o descargar.
+- Desglose de gastos por categoría e historial de precios por supermercado y variante, con zoom y exportación.
 
 No hay login: la aplicación está pensada para desarrollo local y datos personales. No publiques el servidor Vite en redes ni expongas el backend sin añadir autenticación.
 
