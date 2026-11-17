@@ -264,3 +264,75 @@ button:disabled { cursor: not-allowed; opacity: .65; }
   .space-member-actions { flex-wrap: wrap; }
   .invitation-link-card { align-items: stretch; flex-direction: column; }
 }
+
+.colife-hub-shell .sidebar { display: none; }
+.colife-hub-shell .main-area { margin-left: 0; }
+.colife-hub-shell .page-content { width: min(1120px, 100%); margin: 0 auto; padding-top: 40px; }
+.sidebar .primary-nav { margin-top: 38px; gap: 7px; }
+.sidebar .nav-item { min-height: 44px; }
+.topbar { position: sticky; top: 0; z-index: 20; background: rgba(255, 255, 255, .94); box-shadow: 0 1px 0 rgba(32, 43, 65, .07); backdrop-filter: blur(14px); }
+.topbar-navigation { min-width: 0; display: flex; align-items: center; }
+.area-switcher { display: inline-flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid #eceef3; border-radius: 12px; background: #f7f8fb; }
+.area-switcher-button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 0; border-radius: 9px; color: #788293; background: transparent; font-size: 11px; font-weight: 700; transition: background .18s, color .18s, box-shadow .18s; }
+.area-switcher-button:hover { color: #5e51aa; background: #fff; }
+.area-switcher-button.active { color: #6253b4; background: #fff; box-shadow: 0 2px 8px #2c31500d; }
+.area-switcher-button.active svg { color: #8270d6; }
+.area-count { min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 5px; border-radius: 999px; color: #6a5abd; background: #efedfb; font-size: 9px; }
+.colife-hub { display: grid; gap: 25px; }
+.colife-hub-heading { display: flex; align-items: center; gap: 16px; padding: 8px 0 4px; }
+.colife-hub-mark { width: 50px; height: 50px; display: grid; place-items: center; border: 1px solid #e8e3fc; border-radius: 16px; color: #7868ce; background: linear-gradient(145deg, #f8f6ff, #eeebfc); }
+.colife-hub-heading .eyebrow { color: #8b7bd3; font-size: 9px; letter-spacing: 1.2px; }
+.colife-hub-heading h1 { margin: 5px 0 4px; color: #303848; font: 750 25px/1.2 Manrope, sans-serif; letter-spacing: -.5px; }
+.colife-hub-heading p, .colife-action-card p, .colife-list-heading p { margin: 0; color: #8992a1; font-size: 11px; line-height: 1.6; }
+.colife-actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.colife-action-card { min-width: 0; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 4px 12px; padding: 19px; border: 1px solid #eceef3; border-radius: 15px; background: #fff; box-shadow: 0 7px 25px #202b4108; }
+.colife-action-icon { width: 38px; height: 38px; display: grid; place-items: center; grid-row: span 2; border-radius: 12px; color: #7969d0; background: #f1effd; }
+.colife-action-icon.join-icon { color: #3d9b7b; background: #eaf7f1; }
+.colife-action-card h2 { margin: 2px 0 4px; color: #3b4554; font: 700 14px Manrope, sans-serif; }
+.colife-action-card .form-field, .colife-action-card>.button { grid-column: 1 / -1; }
+.colife-action-card .form-field { margin: 10px 0 3px; }
+.colife-action-card>.button { width: 100%; justify-content: center; }
+.colife-action-card input { height: 39px; }
+.colife-list-heading { display: flex; align-items: end; justify-content: space-between; padding-top: 4px; }
+.colife-list-heading h2 { margin: 0 0 4px; color: #3b4554; font: 700 16px Manrope, sans-serif; }
+.colife-space-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.colife-space-card { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 15px; border: 1px solid #eceef3; border-radius: 13px; background: #fff; transition: transform .18s, box-shadow .18s, border-color .18s; }
+.colife-space-card:hover { transform: translateY(-2px); border-color: #ded9f7; box-shadow: 0 8px 20px #202b410b; }
+.colife-space-icon { width: 37px; height: 37px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 11px; color: #7665ca; background: #f2effe; }
+.colife-space-copy { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.colife-space-copy h3 { overflow: hidden; margin: 0; color: #3b4554; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.colife-space-copy span { color: #8992a1; font-size: 10px; }
+.colife-space-card>.button { flex: 0 0 auto; }
+.colife-empty { min-height: 150px; display: grid; justify-items: center; align-content: center; gap: 8px; padding: 22px; border: 1px dashed #dedfec; border-radius: 14px; color: #788293; background: #fbfbfd; text-align: center; }
+.colife-empty-icon { width: 42px; height: 42px; display: grid; place-items: center; margin-bottom: 3px; border-radius: 13px; color: #8474d5; background: #f1effc; }
+.colife-empty strong { color: #4a5362; font-size: 12px; }
+.colife-empty span { max-width: 360px; font-size: 10px; line-height: 1.6; }
+.logout-button { color: #7c8696; }
+.logout-button:hover { color: #b94f58; background: #fff0f1; }
+.mylife-logo { position: relative; display: block; width: 150px; height: 48px; flex: 0 0 auto; overflow: hidden; }
+.mylife-logo img { position: absolute; top: 50%; left: 0; display: block; width: 150px; height: 150px; max-width: none; transform: translateY(-50%); object-fit: contain; }
+.sidebar .brand .mylife-logo { width: 118px; height: 38px; margin-left: 2px; }
+.sidebar .brand .mylife-logo img { width: 118px; height: 118px; }
+@media (max-width: 850px) {
+  .sidebar .primary-nav { margin-top: 36px; }
+  .topbar-navigation { gap: 10px; }
+  .colife-hub-shell .page-content { padding-top: 30px; }
+}
+@media (max-width: 620px) {
+  .sidebar .primary-nav { margin: 0; }
+  .topbar { position: sticky; top: 0; }
+  .topbar-navigation { flex: 1; }
+  .area-switcher { padding: 3px; }
+  .area-switcher-button { min-height: 31px; padding: 0 9px; font-size: 10px; }
+  .area-switcher-button svg { width: 13px; height: 13px; }
+  .colife-hub-shell .main-area { padding-bottom: 0; }
+  .colife-hub-shell .page-content { padding: 24px 16px; }
+  .colife-hub { gap: 19px; }
+  .colife-hub-heading { align-items: flex-start; gap: 11px; }
+  .colife-hub-mark { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 13px; }
+  .colife-hub-heading h1 { font-size: 21px; }
+  .colife-hub-heading p { font-size: 10px; }
+  .colife-actions-grid, .colife-space-grid { grid-template-columns: 1fr; }
+  .colife-action-card { padding: 15px; }
+  .colife-space-card { gap: 9px; padding: 12px; }
+}

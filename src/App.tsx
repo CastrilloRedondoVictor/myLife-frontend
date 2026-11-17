@@ -1,8 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, ChevronDown, CircleHelp,
-  Clock3, CreditCard, Ellipsis, Filter, LayoutDashboard, LoaderCircle, Pencil, Plus, Search, Settings2, Sparkles,
-  ShoppingBasket, Tag, Target, Trash2, TrendingDown, TrendingUp, Wallet, X,
+  ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Bell, Building2, CalendarDays, Check, ChevronDown, CircleHelp,
+  Clock3, CreditCard, Filter, LayoutDashboard, Link2, LoaderCircle, LogOut, Pencil, Plus, Search, Settings2, Sparkles,
+  ShoppingBasket, Tag, Target, Trash2, TrendingDown, TrendingUp, Users, Wallet, X,
 } from 'lucide-react';
 import { api, authApi, setSelectedSpaceId, sharedExpensesApi, settlementsApi, spacesApi, type SharedExpenseInput } from './api';
 import { confirmAction, showError, showInfo, showSuccess } from './alerts';
@@ -49,6 +49,8 @@ const navItems: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> 
 export default function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
+  const [activeArea, setActiveArea] = useState<'mylife' | 'colife'>('mylife');
+  const [showCoLifeHub, setShowCoLifeHub] = useState(false);
   const refreshSequence = useRef(0);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
@@ -120,10 +122,14 @@ export default function App() {
             window.sessionStorage.removeItem('mylife.pendingInvitation');
             const refreshedSpaces = await spacesApi.list();
             setSession({ ...currentSession, spaces: refreshedSpaces });
-            setSelectedSpace(refreshedSpaces.find((space) => space.id === joined.spaceId) ?? refreshedSpaces[0] ?? null);
+            const joinedSpace = refreshedSpaces.find((space) => space.id === joined.spaceId) ?? refreshedSpaces[0] ?? null;
+            setSelectedSpace(joinedSpace);
+            setActiveArea(joinedSpace?.type === 'COLIFE' ? 'colife' : 'mylife');
           } else {
             const savedSpaceId = window.localStorage.getItem('mylife.selectedSpaceId');
-            setSelectedSpace(spaces.find((space) => space.id === savedSpaceId) ?? spaces.find((space) => space.type === 'PERSONAL') ?? spaces[0] ?? null);
+            const initialSpace = spaces.find((space) => space.id === savedSpaceId) ?? spaces.find((space) => space.type === 'PERSONAL') ?? spaces[0] ?? null;
+            setSelectedSpace(initialSpace);
+            setActiveArea(initialSpace?.type === 'COLIFE' ? 'colife' : 'mylife');
           }
         }
       } catch (reason) {
@@ -141,7 +147,12 @@ export default function App() {
   }, [selectedSpace]);
 
   const switchSpace = useCallback((space: Space) => {
-    if (space.id === selectedSpace?.id) return;
+    setActiveArea(space.type === 'COLIFE' ? 'colife' : 'mylife');
+    setShowCoLifeHub(false);
+    if (space.id === selectedSpace?.id) {
+      setTab('overview');
+      return;
+    }
     refreshSequence.current += 1;
     clearWorkspaceData();
     setSelectedSpaceId(null);
@@ -203,7 +214,7 @@ export default function App() {
     }
   }, [month, selectedSpace]);
 
-  useEffect(() => { if (session?.authenticated && selectedSpace) void refresh(); }, [refresh, session, selectedSpace]);
+  useEffect(() => { if (session?.authenticated && selectedSpace && !showCoLifeHub) void refresh(); }, [refresh, session, selectedSpace, showCoLifeHub]);
   const cashflowData = useMemo(() => dashboard?.dailyCashflow
     .map((point) => ({
       ...point,
@@ -224,7 +235,48 @@ export default function App() {
     .filter((category) => category.value > 0) ?? [], [dashboard, expenseFilter]);
   const categoryExpenseTotal = expenseCategories.reduce((total, category) => total + category.value, 0);
   const categoryExpenseLabel = expenseFilter === 'variable' ? 'Variables' : expenseFilter === 'fixed' ? 'Fijos' : 'Total del mes';
-  const visibleNavItems = selectedSpace?.type === 'COLIFE' ? navItems : navItems.filter(({ id }) => id !== 'shared' && id !== 'settlements');
+  const visibleNavItems = showCoLifeHub ? [] : selectedSpace?.type === 'COLIFE' ? navItems : navItems.filter(({ id }) => id !== 'shared' && id !== 'settlements');
+
+  function navigateArea(area: 'mylife' | 'colife') {
+    if (area === 'colife') {
+      setActiveArea('colife');
+      setShowCoLifeHub(true);
+      setLoading(false);
+      refreshSequence.current += 1;
+      return;
+    }
+    setActiveArea('mylife');
+    setShowCoLifeHub(false);
+    const personalSpace = session?.authenticated ? session.spaces.find((space) => space.type === 'PERSONAL') : undefined;
+    if (personalSpace) switchSpace(personalSpace);
+  }
+
+  async function handleJoinCoLife(value: string) {
+    const rawValue = value.trim();
+    let token = rawValue;
+    try {
+      const inviteUrl = new URL(rawValue);
+      token = inviteUrl.searchParams.get('invite') ?? '';
+    } catch { /* A raw invitation token is also accepted. */ }
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(token)) throw new Error('Pega un enlace de invitación válido o su código.');
+    const joined = await spacesApi.acceptInvitation(token);
+    const spaces = await spacesApi.list();
+    setSession((current) => current?.authenticated ? { ...current, spaces } : current);
+    const target = spaces.find((space) => space.id === joined.spaceId);
+    if (!target) throw new Error('Te has unido, pero no se pudo cargar el CoLife. Vuelve a abrir la sección.');
+    switchSpace(target);
+    showSuccess(`Te has unido a ${joined.name}.`);
+  }
+
+  async function handleLogout() {
+    if (!await confirmAction('¿Cerrar sesión?', 'Tendrás que volver a iniciar sesión con Google para acceder a tus espacios.', 'Cerrar sesión')) return;
+    try {
+      await authApi.logout();
+      window.location.reload();
+    } catch (reason) {
+      showError(reason instanceof Error ? reason.message : 'No se pudo cerrar sesión.');
+    }
+  }
 
   async function handleCreateEntry(data: { type: EntryType; amount: number; description: string; date: string; categoryId: string }) {
     await api.createEntry({ ...data, status: 'CONFIRMED' });
@@ -259,7 +311,10 @@ export default function App() {
     const spaces = await spacesApi.list();
     setSession((current) => current?.authenticated ? { ...current, spaces } : current);
     const next = spaces.find((space) => space.id === created.id);
-    if (next) switchSpace(next);
+    if (next) {
+      switchSpace(next);
+      setTab('settings');
+    }
     setNewInvitationUrl(created.invitation?.url ?? '');
     showSuccess('CoLife creado. Guarda el enlace de invitación para compartirlo.');
   }
@@ -399,38 +454,38 @@ export default function App() {
     setModal('budget');
   }
 
-  const pageTitle = visibleNavItems.find((item) => item.id === tab)?.label ?? (tab === 'settings' ? 'Preferencias' : 'Resumen');
+  const pageTitle = showCoLifeHub ? 'Tus CoLife' : visibleNavItems.find((item) => item.id === tab)?.label ?? (tab === 'settings' ? 'Preferencias' : 'Resumen');
 
   if (authLoading) return <div className="loading-state auth-loading"><LoaderCircle className="spin" size={24} /> Verificando tu sesión segura…</div>;
-  if (authError) return <main className="auth-screen"><section className="auth-card"><div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><span>my<span>life</span></span></div><h1>No se pudo verificar la sesión</h1><p>{authError}</p><button className="button button-primary" onClick={() => window.location.reload()}>Reintentar</button></section></main>;
-  if (!session?.authenticated) return <main className="auth-screen"><section className="auth-card"><div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><span>my<span>life</span></span></div><h1>Tus finanzas, en privado</h1><p>Inicia sesión con Google para abrir tu espacio personal o unirte a un CoLife.</p><a className="button button-primary auth-login" href={authApi.loginUrl()}>Continuar con Google <ArrowRight size={17} /></a></section></main>;
-  if (!selectedSpace) return <main className="auth-screen"><section className="auth-card"><div className="brand"><div className="brand-mark"><Sparkles size={18} /></div><span>my<span>life</span></span></div><h1>No hay espacios disponibles</h1><p>Crea un espacio Personal con la configuración de datos antes de continuar.</p><button className="button button-primary" onClick={() => void authApi.logout().then(() => window.location.reload())}>Cerrar sesión</button></section></main>;
+  if (authError) return <main className="auth-screen"><section className="auth-card"><div className="brand"><MyLifeLogo /></div><h1>No se pudo verificar la sesión</h1><p>{authError}</p><button className="button button-primary" onClick={() => window.location.reload()}>Reintentar</button></section></main>;
+  if (!session?.authenticated) return <main className="auth-screen"><section className="auth-card"><div className="brand"><MyLifeLogo /></div><h1>Tus finanzas, en privado</h1><p>Inicia sesión con Google para abrir tu espacio personal o unirte a un CoLife.</p><a className="button button-primary auth-login" href={authApi.loginUrl()}>Continuar con Google <ArrowRight size={17} /></a></section></main>;
+  if (!selectedSpace) return <main className="auth-screen"><section className="auth-card"><div className="brand"><MyLifeLogo /></div><h1>No hay espacios disponibles</h1><p>Crea un espacio Personal con la configuración de datos antes de continuar.</p><button className="button button-primary" onClick={() => void handleLogout()}>Cerrar sesión</button></section></main>;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${showCoLifeHub ? 'colife-hub-shell' : ''}`}>
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><Sparkles size={18} strokeWidth={2.2} /></div><span>my<span>life</span></span></div>
-        <div className="workspace-label">ESPACIO ACTIVO</div>
-        <label className="workspace-select-label" htmlFor="workspace-select">Cambiar espacio</label>
-        <select id="workspace-select" className="workspace-select" value={selectedSpace.id} onChange={(event) => { const next = session.spaces.find((space) => space.id === event.target.value); if (next) switchSpace(next); }} aria-label="Seleccionar espacio">
-          {session.spaces.map((space) => <option key={space.id} value={space.id}>{space.type === 'PERSONAL' ? 'Personal' : space.name}</option>)}
-        </select>
+        <div className="brand"><MyLifeLogo /></div>
         <nav className="primary-nav" aria-label="Navegación principal">
           {visibleNavItems.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span>{id === 'entries' && dashboard?.monthSummary.pending ? <b className="nav-count">{dashboard.monthSummary.pending}</b> : null}</button>)}
         </nav>
         <div className="sidebar-bottom">
-          <div className="sidebar-tip"><div className="tip-icon"><Sparkles size={15} /></div><strong>Pequeños pasos,<br />grandes cambios.</strong><span>Tu futuro se construye con lo que haces hoy.</span><button onClick={() => setTab('budgets')}>Ver mis objetivos <ArrowRight size={14} /></button></div>
-          <div className="profile-row"><div className="avatar">{(session.user.displayName ?? session.user.email).slice(0, 1).toUpperCase()}</div><div className="profile-copy"><strong>{session.user.displayName ?? session.user.email}</strong><span>{selectedSpace.type === 'PERSONAL' ? 'Espacio personal' : selectedSpace.name}</span></div><button className="icon-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => void authApi.logout().then(() => window.location.reload()).catch((reason) => showError(reason instanceof Error ? reason.message : 'No se pudo cerrar sesión.'))}><Ellipsis size={19} /></button></div>
+          <div className="profile-row"><div className="avatar">{(session.user.displayName ?? session.user.email).slice(0, 1).toUpperCase()}</div><div className="profile-copy"><strong>{session.user.displayName ?? session.user.email}</strong><span>{showCoLifeHub ? 'Espacios compartidos' : selectedSpace.type === 'PERSONAL' ? 'Espacio personal' : selectedSpace.name}</span></div><button className="icon-button logout-button" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => void handleLogout()}><LogOut size={17} /></button></div>
         </div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumbs"><label className="topbar-space-picker"><span className="sr-only">Espacio activo</span><select value={selectedSpace.id} onChange={(event) => { const next = session.spaces.find((space) => space.id === event.target.value); if (next) switchSpace(next); }} aria-label="Seleccionar espacio activo">{session.spaces.map((space) => <option key={space.id} value={space.id}>{space.type === 'PERSONAL' ? 'Personal' : space.name}</option>)}</select></label><span className="crumb-slash">/</span><strong>{pageTitle}</strong></div>
-          <div className="topbar-actions"><div className="secure-chip"><span className="secure-dot" /> Sesión protegida</div><button className="icon-button" aria-label="Ayuda" onClick={() => showInfo('Consejo de privacidad', 'Tu sesión está protegida con Google y los cambios se limitan al espacio activo.') }><CircleHelp size={18} /></button><button className="icon-button notification-button" aria-label="Ver movimientos pendientes" title="Ver movimientos pendientes" onClick={() => setTab('entries')}><Bell size={18} /><i /></button><div className="top-avatar">{(session.user.displayName ?? session.user.email).slice(0, 1).toUpperCase()}</div></div>
+          <div className="topbar-navigation">
+            <nav className="area-switcher" aria-label="Secciones principales">
+              <button className={`area-switcher-button ${activeArea === 'mylife' ? 'active' : ''}`} onClick={() => navigateArea('mylife')}><Sparkles size={15} /> MyLife</button>
+              <button className={`area-switcher-button ${activeArea === 'colife' ? 'active' : ''}`} onClick={() => navigateArea('colife')}><Users size={15} /> CoLife<span className="area-count">{session.spaces.filter((space) => space.type === 'COLIFE').length}</span></button>
+            </nav>
+          </div>
+          <div className="topbar-actions"><div className="secure-chip"><span className="secure-dot" /> Sesión protegida</div><button className="icon-button" aria-label="Ayuda" onClick={() => showInfo('Consejo de privacidad', 'Tu sesión está protegida con Google y los cambios se limitan al espacio activo.') }><CircleHelp size={18} /></button>{!showCoLifeHub && <button className="icon-button notification-button" aria-label="Ver movimientos pendientes" title="Ver movimientos pendientes" onClick={() => { setActiveArea(selectedSpace.type === 'COLIFE' ? 'colife' : 'mylife'); setTab('entries'); }}><Bell size={18} /><i /></button>}<div className="top-avatar">{(session.user.displayName ?? session.user.email).slice(0, 1).toUpperCase()}</div></div>
         </header>
 
         <div className="page-content">
+          {showCoLifeHub ? <CoLifeHub spaces={session.spaces.filter((space) => space.type === 'COLIFE')} onCreate={handleCreateSpace} onJoin={handleJoinCoLife} onOpen={switchSpace} /> : <>
           <section className="welcome-row">
             <div><div className="eyebrow"><span className="eyebrow-line" /> TU DINERO, CON MÁS CLARIDAD</div><h1>{tab === 'overview' ? 'Un vistazo a tus finanzas' : pageTitle}</h1><p>{tab === 'overview' ? 'Cada decisión cuenta. Aquí tienes el mapa de tu mes.' : tab === 'entries' ? 'Todo lo que entra y sale, en un solo lugar.' : tab === 'shopping' ? 'Tickets, lista y precios para organizar mejor la compra.' : tab === 'recurring' ? 'Tus ingresos y gastos que se repiten cada mes.' : tab === 'budgets' ? 'Ponle intención a cada euro con límites claros.' : selectedSpace.type === 'COLIFE' ? 'Gastos y acuerdos de tu espacio compartido.' : 'Personaliza tus categorías y revisa cómo protegemos tus datos.'}</p></div>
             {selectedSpace.type === 'PERSONAL' && tab !== 'settings' && tab !== 'shopping' && <button className="button button-primary" onClick={() => openEntryForm()}><Plus size={17} /> Nuevo movimiento</button>}
@@ -474,12 +529,13 @@ export default function App() {
           {tab === 'settlements' && selectedSpace.type === 'COLIFE' && <SettlementsPanel ledger={settlementLedger} records={settlementRecords} currentUserId={session.user.id} archived={Boolean(selectedSpace.archivedAt)} onCreate={(from, to, amount, note) => handleCreateSettlement(from, to, amount, note)} />}
 
           {tab === 'settings' && selectedSpace.type === 'PERSONAL' && <PreferencesPanel categories={categories} onAddCategory={() => setModal('category')} onUpdateCategory={handleUpdateCategory} onDeleteCategory={handleDeleteCategory} />}
-          {tab === 'settings' && <SpaceSettingsPanel space={selectedSpace} userId={session.user.id} members={spaceMembers} audit={auditEvents} invitationOpen={invitationOpen} newInvitationUrl={newInvitationUrl} onCreate={handleCreateSpace} onRename={handleRenameSpace} onToggleInvitation={handleInvitationToggle} onRotateInvitation={handleRotateInvitation} onChangeRole={handleMemberRole} onRemoveMember={handleRemoveMember} onArchive={handleArchiveSpace} onLeave={handleLeaveSpace} onCopyInvitation={() => void copyInvitation()} />}
+          {tab === 'settings' && selectedSpace.type === 'COLIFE' && <SpaceSettingsPanel space={selectedSpace} userId={session.user.id} members={spaceMembers} audit={auditEvents} invitationOpen={invitationOpen} newInvitationUrl={newInvitationUrl} onCreate={handleCreateSpace} onRename={handleRenameSpace} onToggleInvitation={handleInvitationToggle} onRotateInvitation={handleRotateInvitation} onChangeRole={handleMemberRole} onRemoveMember={handleRemoveMember} onArchive={handleArchiveSpace} onLeave={handleLeaveSpace} onCopyInvitation={() => void copyInvitation()} />}
           {tab === 'shopping' && <ShoppingPanel key={selectedSpace.id} isCoLife={selectedSpace.type === 'COLIFE'} members={spaceMembers} currentUserId={session.user.id} categories={categories} onFinancialChange={() => { void refresh(); }} />}
 
           {tab !== 'settings' && !dashboard && !loading && !error && <div className="empty-state"><Wallet size={22} />No hay datos todavía. Añade tu primer movimiento.</div>}
+          </>}
         </div>
-        <footer className="footer-note"><span>Un paso a la vez. Vas bien.</span><span>Privado · Tus finanzas, solo tuyas <span className="footer-heart">♥</span></span></footer>
+        {!showCoLifeHub && <footer className="footer-note"><span>Privado · Tus finanzas, solo tuyas <span className="footer-heart">♥</span></span></footer>}
       </main>
 
       {modal && <ModalDialog title={modal === 'entry' ? editingEntry ? 'Editar movimiento' : 'Nuevo movimiento' : modal === 'recurring' ? 'Nueva regla mensual' : modal === 'category' ? 'Nueva categoría' : modal === 'shared-expense' ? editingSharedExpense ? 'Editar gasto compartido' : 'Nuevo gasto compartido' : editingBudget ? 'Editar presupuesto' : 'Nuevo presupuesto'} onClose={() => { setModal(null); setEditingEntry(null); setEditingBudget(null); setEditingSharedExpense(null); }}>
@@ -490,6 +546,66 @@ export default function App() {
         {modal === 'shared-expense' && <SharedExpenseForm categories={categories} members={spaceMembers} currentUserId={session.user.id} initial={editingSharedExpense} onSubmit={handleCreateSharedExpense} />}
       </ModalDialog>}
     </div>
+  );
+}
+
+function MyLifeLogo({ className = '' }: { className?: string }) {
+  return <span className={`mylife-logo ${className}`} role="img" aria-label="MyLife"><img src="/images/mylife-logo.png" alt="" /></span>;
+}
+
+function CoLifeHub({ spaces, onCreate, onJoin, onOpen }: {
+  spaces: Space[];
+  onCreate: (name: string) => Promise<void>;
+  onJoin: (invitation: string) => Promise<void>;
+  onOpen: (space: Space) => void;
+}) {
+  const [name, setName] = useState('');
+  const [invitation, setInvitation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(action: () => Promise<void>) {
+    setBusy(true);
+    setError('');
+    try { await action(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'No se pudo completar la operación.'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="colife-hub">
+      <header className="colife-hub-heading">
+        <div className="colife-hub-mark"><Users size={20} /></div>
+        <div><span className="eyebrow">FINANZAS COMPARTIDAS</span><h1>Tus CoLife</h1><p>Organiza gastos y compras con las personas con las que compartes planes.</p></div>
+      </header>
+
+      <div className="colife-actions-grid">
+        <form className="colife-action-card" onSubmit={(event) => { event.preventDefault(); void submit(async () => { await onCreate(name.trim()); setName(''); }); }}>
+          <div className="colife-action-icon"><Building2 size={18} /></div>
+          <div><h2>Crea un CoLife</h2><p>Empieza un espacio nuevo para compartir gastos.</p></div>
+          <label className="form-field">Nombre del espacio<input required maxLength={33} value={name} onChange={(event) => setName(event.target.value)} placeholder="Ej. Casa, viaje…" /></label>
+          <button className="button button-primary" type="submit" disabled={busy || !name.trim()}>{busy ? <LoaderCircle size={15} className="spin" /> : <Plus size={16} />} Crear CoLife</button>
+        </form>
+
+        <form className="colife-action-card" onSubmit={(event) => { event.preventDefault(); void submit(async () => { await onJoin(invitation); setInvitation(''); }); }}>
+          <div className="colife-action-icon join-icon"><Link2 size={18} /></div>
+          <div><h2>Únete a un CoLife</h2><p>Pega el enlace de invitación o su código.</p></div>
+          <label className="form-field">Enlace o código<input required value={invitation} onChange={(event) => setInvitation(event.target.value)} placeholder="https://…?invite=…" /></label>
+          <button className="button button-soft" type="submit" disabled={busy || !invitation.trim()}>{busy ? <LoaderCircle size={15} className="spin" /> : <ArrowRight size={16} />} Unirme</button>
+        </form>
+      </div>
+
+      {error && <div className="form-error" role="alert">{error}</div>}
+
+      <div className="colife-list-heading"><div><h2>Mis espacios</h2><p>{spaces.length ? `${spaces.length} ${spaces.length === 1 ? 'CoLife' : 'CoLifes'}` : 'Aún no perteneces a ningún CoLife.'}</p></div></div>
+      {spaces.length ? <div className="colife-space-grid">{spaces.map((space) => (
+        <article className="colife-space-card" key={space.id}>
+          <div className="colife-space-icon"><Users size={18} /></div>
+          <div className="colife-space-copy"><h3>{space.name}</h3><span>{space.role === 'ADMIN' ? 'Administrador' : 'Miembro'}{space.archivedAt ? ' · Archivado' : ''}</span></div>
+          <button className="button button-small button-soft" onClick={() => onOpen(space)}>Abrir <ArrowRight size={14} /></button>
+        </article>
+      ))}</div> : <div className="colife-empty"><div className="colife-empty-icon"><Users size={21} /></div><strong>Tu espacio compartido empieza aquí</strong><span>Crea un CoLife o únete con un enlace de invitación para verlo en esta lista.</span></div>}
+    </section>
   );
 }
 
