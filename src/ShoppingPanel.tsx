@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEve
 import { Archive, ArrowDown, Check, ChevronDown, ChevronUp, ClipboardList, LoaderCircle, Pencil, Plus, ReceiptText, Search, ShoppingBasket, Store, Trash2, X } from 'lucide-react';
 import { api, type ShoppingReceiptInput } from './api';
 import { confirmAction, showError, showSuccess } from './alerts';
-import type { Category, ProductComparison, ShoppingDimension, ShoppingListItem, ShoppingProduct, ShoppingReceipt, ShoppingUnit, Supermarket } from './types';
+import type { Category, ProductComparison, ShoppingDimension, ShoppingListItem, ShoppingProduct, ShoppingReceipt, ShoppingUnit, SpaceMember, Supermarket } from './types';
 import type { PriceHistoryLine, PriceHistoryRow } from './ChartVisualizations';
 
 type Section = 'receipts' | 'list' | 'compare' | 'catalog';
@@ -28,7 +28,7 @@ const quantityFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3
 const moneyText = (value: number | string) => euro.format(Number(value));
 const formatDate = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 
-export default function ShoppingPanel({ categories, onFinancialChange }: { categories: Category[]; onFinancialChange: () => void }) {
+export default function ShoppingPanel({ categories, onFinancialChange, isCoLife, members, currentUserId }: { categories: Category[]; onFinancialChange: () => void; isCoLife: boolean; members: SpaceMember[]; currentUserId: string }) {
   const [section, setSection] = useState<Section>('receipts');
   const [products, setProducts] = useState<ShoppingProduct[]>([]);
   const [supermarkets, setSupermarkets] = useState<Supermarket[]>([]);
@@ -39,7 +39,13 @@ export default function ShoppingPanel({ categories, onFinancialChange }: { categ
   const [editingReceipt, setEditingReceipt] = useState<ShoppingReceipt | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     setError('');
+    setProducts([]);
+    setSupermarkets([]);
+    setReceipts([]);
+    setListItems([]);
+    setEditingReceipt(null);
     try {
       const [nextProducts, nextStores, nextReceipts, nextList] = await Promise.all([
         api.shoppingProducts('', true), api.supermarkets(true), api.shoppingReceipts(), api.shoppingList(),
@@ -111,7 +117,7 @@ export default function ShoppingPanel({ categories, onFinancialChange }: { categ
     </div>
     {error && <div className="shopping-error" role="alert"><strong>No se pudieron cargar las compras.</strong><span>{error}</span><button className="button button-small" onClick={() => { setLoading(true); void load(); }}>Reintentar</button></div>}
     {loading ? <div className="shopping-loading"><LoaderCircle className="spin" size={22} /> Cargando compras…</div> : <>
-      {section === 'receipts' && <ReceiptsView receipts={receipts} categories={categories} products={products.filter((item) => item.active)} supermarkets={supermarkets.filter((item) => item.active)} editing={editingReceipt} onEdit={setEditingReceipt} onCancelEdit={() => setEditingReceipt(null)} onSave={saveReceipt} onDelete={(receipt) => void deleteReceipt(receipt)} onCreateProduct={createProduct} />}
+      {section === 'receipts' && <ReceiptsView receipts={receipts} categories={categories} products={products.filter((item) => item.active)} supermarkets={supermarkets.filter((item) => item.active)} editing={editingReceipt} isCoLife={isCoLife} members={members} currentUserId={currentUserId} onEdit={setEditingReceipt} onCancelEdit={() => setEditingReceipt(null)} onSave={saveReceipt} onDelete={(receipt) => void deleteReceipt(receipt)} onCreateProduct={createProduct} />}
       {section === 'list' && <ShoppingListView items={listItems} products={products.filter((item) => item.active)} onCreateProduct={createProduct} onReload={load} />}
       {section === 'compare' && <CompareView products={products.filter((item) => item.active)} />}
       {section === 'catalog' && <CatalogView products={products} supermarkets={supermarkets} onCreateProduct={createProduct} onReload={load} onArchiveProduct={(product) => void archiveProduct(product)} onArchiveStore={(store) => void archiveStore(store)} />}
@@ -119,8 +125,9 @@ export default function ShoppingPanel({ categories, onFinancialChange }: { categ
   </section>;
 }
 
-function ReceiptsView({ receipts, categories, products, supermarkets, editing, onEdit, onCancelEdit, onSave, onDelete, onCreateProduct }: {
+function ReceiptsView({ receipts, categories, products, supermarkets, editing, isCoLife, members, currentUserId, onEdit, onCancelEdit, onSave, onDelete, onCreateProduct }: {
   receipts: ShoppingReceipt[]; categories: Category[]; products: ShoppingProduct[]; supermarkets: Supermarket[]; editing: ShoppingReceipt | null;
+  isCoLife: boolean; members: SpaceMember[]; currentUserId: string;
   onEdit: (receipt: ShoppingReceipt) => void; onCancelEdit: () => void; onSave: (input: ShoppingReceiptInput) => Promise<void>;
   onDelete: (receipt: ShoppingReceipt) => void; onCreateProduct: (name: string) => Promise<ShoppingProduct>;
 }) {
@@ -129,7 +136,7 @@ function ReceiptsView({ receipts, categories, products, supermarkets, editing, o
   useEffect(() => { if (editing) setFormOpen(true); }, [editing]);
   return <>
     <div className="shopping-section-heading"><div><h2>Tickets de compra</h2><p>Cada ticket se registra como un único gasto por el total final.</p></div><button className="button button-primary" onClick={() => { onCancelEdit(); setFormOpen(true); }}><Plus size={16} /> Añadir ticket</button></div>
-    {formOpen && <ReceiptForm key={editing?.id ?? 'new'} categories={categories} products={products} supermarkets={supermarkets} initial={editing} onSave={onSave} onCreateProduct={onCreateProduct} onCancel={() => { setFormOpen(false); onCancelEdit(); }} />}
+    {formOpen && <ReceiptForm key={editing?.id ?? 'new'} categories={categories} products={products} supermarkets={supermarkets} initial={editing} isCoLife={isCoLife} members={members} currentUserId={currentUserId} onSave={onSave} onCreateProduct={onCreateProduct} onCancel={() => { setFormOpen(false); onCancelEdit(); }} />}
     {receipts.length ? <div className="shopping-receipt-list">{receipts.map((receipt) => <article className="shopping-receipt-card" key={receipt.id}>
       <button className="shopping-receipt-summary" onClick={() => setExpanded(expanded === receipt.id ? null : receipt.id)} aria-expanded={expanded === receipt.id}>
         <span className="shopping-store-mark"><Store size={17} /></span><span className="shopping-receipt-main"><strong>{receipt.supermarket.name}</strong><small>{formatDate(receipt.date)} · {receipt.items.length} {receipt.items.length === 1 ? 'producto' : 'productos'}</small></span>
@@ -140,8 +147,9 @@ function ReceiptsView({ receipts, categories, products, supermarkets, editing, o
   </>;
 }
 
-function ReceiptForm({ categories, products, supermarkets, initial, onSave, onCreateProduct, onCancel }: {
+function ReceiptForm({ categories, products, supermarkets, initial, isCoLife, members, currentUserId, onSave, onCreateProduct, onCancel }: {
   categories: Category[]; products: ShoppingProduct[]; supermarkets: Supermarket[]; initial: ShoppingReceipt | null;
+  isCoLife: boolean; members: SpaceMember[]; currentUserId: string;
   onSave: (input: ShoppingReceiptInput) => Promise<void>; onCreateProduct: (name: string) => Promise<ShoppingProduct>; onCancel: () => void;
 }) {
   const defaultCategory = categories.find((category) => category.type === 'EXPENSE' && normalized(category.name) === 'alimentacion')?.id ?? categories.find((category) => category.type === 'EXPENSE')?.id ?? '';
@@ -149,6 +157,7 @@ function ReceiptForm({ categories, products, supermarkets, initial, onSave, onCr
   const [categoryId, setCategoryId] = useState(initial?.financialEntry.categoryId ?? defaultCategory);
   const [date, setDate] = useState(initial?.date.slice(0, 10) ?? dateToday());
   const [adjustment, setAdjustment] = useState(initial ? String(initial.adjustment) : '0');
+  const [participantIds, setParticipantIds] = useState<string[]>(initial?.financialEntry.shares?.map(({ userId }) => userId) ?? [currentUserId]);
   const [lines, setLines] = useState<ReceiptLineDraft[]>(() => initial?.items.map((item) => {
     const unit = item.unit;
     return { key: item.id, productId: item.productId, productQuery: item.product.name, brand: item.variant.brand ?? '', packageLabel: item.variant.packageLabel ?? '', unitsPurchased: String(item.unitsPurchased), quantity: String(fromBaseQuantity(Number(item.quantityBase) / item.unitsPurchased, unit)), unit, amount: String(item.amount), prefilledDate: '' };
@@ -170,8 +179,10 @@ function ReceiptForm({ categories, products, supermarkets, initial, onSave, onCr
       if (lines.some((line) => !Number.isFinite(Number(line.quantity)) || Number(line.quantity) <= 0 || (line.unit === 'unit' && !Number.isInteger(Number(line.quantity))))) throw new Error('Revisa las cantidades: deben ser mayores que cero y las unidades, números enteros.');
       if (lines.some((line) => !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0 || Math.abs(cents(Number(line.amount)) - Number(line.amount) * 100) > 0.00001)) throw new Error('Cada precio debe ser mayor que cero y tener como máximo dos decimales.');
       if (!Number.isFinite(Number(adjustment)) || Math.abs(Number(adjustment)) > 9999999999.99) throw new Error('El ajuste debe ser un importe válido.');
+      if (isCoLife && participantIds.length === 0) throw new Error('Selecciona al menos un participante para repartir este ticket.');
       const input: ShoppingReceiptInput = {
         supermarketName: storeName.trim(), categoryId, date, adjustment: adjustmentCents / 100,
+        ...(isCoLife ? { splitMode: 'EQUAL' as const, participants: participantIds.map((userId) => ({ userId })) } : {}),
         items: lines.map((line) => ({ productId: line.productId, brand: line.brand.trim() || undefined, packageLabel: line.packageLabel.trim() || undefined, unitsPurchased: Number(line.unitsPurchased), quantity: Number(line.quantity), unit: line.unit, amount: Number(line.amount) })),
       };
       if (totalCents <= 0) throw new Error('El total final del ticket debe ser mayor que cero.');
@@ -185,6 +196,7 @@ function ReceiptForm({ categories, products, supermarkets, initial, onSave, onCr
     <div className="shopping-form-title"><div><span className="shopping-kicker">{initial ? 'EDITAR REGISTRO' : 'NUEVO REGISTRO'}</span><h3>{initial ? 'Editar ticket' : 'Registrar compra'}</h3><p>Completa la tienda y añade cada producto una sola vez.</p></div><div className="receipt-form-heading-end"><span className="receipt-form-line-count">{lines.length} {lines.length === 1 ? 'línea' : 'líneas'}</span><button className="icon-button" type="button" onClick={onCancel} aria-label="Cerrar formulario"><X size={18} /></button></div></div>
     <div className="receipt-form-section-label"><span>01</span><div><strong>Datos de la compra</strong><small>La fecha y la categoría se asociarán al gasto del ticket.</small></div></div>
     <div className="shopping-form-grid"><label className="form-field">Supermercado<input list="supermarket-suggestions" required maxLength={80} value={storeName} onChange={(event) => setStoreName(event.target.value)} placeholder="Ej. Mercadona" /><datalist id="supermarket-suggestions">{[...new Set([...commonSupermarkets, ...supermarkets.map((item) => item.name)])].map((name) => <option key={name} value={name} />)}</datalist></label><label className="form-field">Fecha<input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></label><label className="form-field">Categoría del gasto<select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.filter((category) => category.type === 'EXPENSE').map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label></div>
+    {isCoLife && <fieldset className="shared-participants"><legend>Repartir el total por igual entre</legend>{members.map(({ user }) => <label key={user.id}><input type="checkbox" checked={participantIds.includes(user.id)} onChange={(event) => setParticipantIds((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} />{user.displayName ?? user.email}</label>)}</fieldset>}
     <div className="shopping-lines-heading"><div className="receipt-form-section-label"><span>02</span><div><h4>Productos</h4><small>Elige una marca guardada para recuperar sus datos de la última compra.</small></div></div><button className="button button-small button-soft" type="button" onClick={() => setLines((current) => [...current, newLine()])}><Plus size={14} /> Añadir producto</button></div>
     <div className="shopping-line-list">{lines.map((line, index) => <ReceiptLine key={line.key} index={index} line={line} products={products} onChange={(patch) => updateLine(line.key, patch)} onRemove={() => setLines((current) => current.length > 1 ? current.filter((item) => item.key !== line.key) : current)} onCreateProduct={onCreateProduct} />)}</div>
     <div className="shopping-adjustment-row"><label className="form-field">Ajuste final (+ cargo / − descuento)<input type="number" step="0.01" value={adjustment} onChange={(event) => setAdjustment(event.target.value)} /></label><div className="shopping-totals"><span>Subtotal de productos</span><strong>{euro.format(lineTotalCents / 100)}</strong><span>Total del movimiento</span><strong className="shopping-grand-total">{euro.format(totalCents / 100)}</strong></div></div>

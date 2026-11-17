@@ -1,5 +1,95 @@
 export type EntryType = 'INCOME' | 'EXPENSE';
 export type EntryStatus = 'PENDING' | 'CONFIRMED';
+export type SpaceType = 'PERSONAL' | 'COLIFE';
+export type SplitMode = 'EQUAL' | 'PERCENTAGE' | 'EXACT';
+
+export interface Space {
+  id: string;
+  name: string;
+  type: SpaceType;
+  currency: string;
+  role: 'ADMIN' | 'MEMBER';
+  archivedAt: string | null;
+}
+
+export interface CreatedSpace extends Space {
+  invitation?: { token: string; url: string };
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  displayName: string | null;
+  avatarUrl?: string | null;
+}
+
+export type AuthSession =
+  | { authenticated: false }
+  | { authenticated: true; user: UserProfile; spaces: Space[]; csrfToken: string | null };
+
+export interface SpaceMember {
+  user: UserProfile;
+  role: 'ADMIN' | 'MEMBER';
+  joinedAt: string;
+}
+
+export interface SharedExpenseShare {
+  id: string;
+  userId: string;
+  amount: number | string;
+  allocationType: SplitMode;
+  shareBasis: number | null;
+  user: UserProfile;
+}
+
+export interface SharedExpense extends Entry {
+  payerUserId: string;
+  payer: UserProfile;
+  shares: SharedExpenseShare[];
+  shoppingReceipt?: { id: string } | null;
+}
+
+export interface SettlementBalance {
+  user: UserProfile;
+  role: 'ADMIN' | 'MEMBER';
+  status: 'ACTIVE' | 'LEFT';
+  joinedAt: string;
+  leftAt: string | null;
+  balanceCents: number;
+}
+
+export interface SuggestedTransfer {
+  fromUserId: string;
+  toUserId: string;
+  amountCents: number;
+}
+
+export interface SettlementLedger {
+  balances: SettlementBalance[];
+  suggestions: SuggestedTransfer[];
+}
+
+export interface SettlementRecord {
+  id: string;
+  fromUser: UserProfile;
+  toUser: UserProfile;
+  createdBy: UserProfile;
+  amount: number | string;
+  note: string | null;
+  paidAt: string;
+  createdAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  actorId: string;
+  actor: UserProfile;
+  entityType: string;
+  entityId: string;
+  action: string;
+  details: string;
+  createdAt: string;
+}
 
 export interface Category {
   id: string;
@@ -20,6 +110,9 @@ export interface Entry {
   category: Category;
   recurringRuleId: string | null;
   isFixed: boolean;
+  payerUserId?: string | null;
+  derivedShareId?: string | null;
+  voidedAt?: string | null;
 }
 
 export interface RecurringRule {
@@ -31,6 +124,9 @@ export interface RecurringRule {
   endDate: string | null;
   active: boolean;
   category: Category;
+  payerUserId?: string | null;
+  splitMode?: SplitMode | null;
+  shares?: Array<{ userId: string; allocationType: SplitMode; shareBasis: number | null; exactAmount: number | string | null }>;
 }
 
 export interface Budget {
@@ -117,7 +213,8 @@ export interface ShoppingReceipt {
   adjustment: number | string;
   totalAmount: number | string;
   supermarket: Supermarket;
-  financialEntry: Entry;
+  financialEntry: Entry & { shares?: SharedExpenseShare[] };
+  voidedAt?: string | null;
   items: ShoppingReceiptItem[];
 }
 
